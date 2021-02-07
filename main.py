@@ -1,8 +1,5 @@
-import signal
-import os
-import sys
+import signal, os, re, sys, time, subprocess
 import RPi.GPIO as GPIO
-import time
 import ST7789
 
 
@@ -128,9 +125,9 @@ class MPDConnect(object):
 # Create ST7789 LCD display class.
 disp = ST7789.ST7789(
     port=0,
-    cs=1,  			# BG_SPI_CS_BACK or BG_SPI_CS_FRONT, 1 to avoid clash with DAC
+    cs=1,           # 1 to avoid clash with DAC
     dc=9,
-    backlight=13,               # 18 for back BG slot, 19 for front BG slot, 13 to avoid clash with DAC.
+    backlight=13,   # 13 to avoid clash with DAC
     spi_speed_hz=80 * 1000 * 1000
 )
 
@@ -142,9 +139,7 @@ HEIGHT = disp.height
 # Initialize display.
 disp.begin()
 
-# MPD Fetch
-client = MPDConnect()
-client.connect()
+
 
 
 
@@ -152,93 +147,163 @@ image = Image.open('/home/pi/git/pirate/themes/streamline/images/home-ico.png');
 image = image.resize((WIDTH,HEIGHT))
 disp.display(image)
 
+def get_station():
+    # EXTRACT STATION NAME FROM AMENDED RADIO URL
+    # EXAMPLE: http://ice6.somafm.com/lush-128-aac?station_name=SomaFM_Lush
+    station_url     = subprocess.check_output("mpc -f %file% current", stderr=subprocess.STDOUT, shell=True)
+    info_station    = re.findall(r'\?station_name=(.*)', station_url)
+    info_station_name = info_station[0].replace('_', ' ')
 
-def screen_update(file, msg):
-    	font    = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
-    	file    = "/home/pi/git/pirate/themes/streamline/images/" + file + ".png"
-    	image   = Image.open(file)
-	image   = image.convert('RGB')
-    	draw    = ImageDraw.Draw(image)
-    	draw.text((0, 100), msg, font=font, fill=(255, 255, 255))
+    return(info_station_name)
 
-    	image   = image.resize((WIDTH, HEIGHT))
-	disp.display(image)
+def screen_update(file, text_center, text_top):
+    font_top                = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    font_center_top         = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+    font_center_bottom      = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
+    file        = "/home/pi/git/pirate/themes/streamline/images/" + file + ".png"
+    image       = Image.open(file)
+    
+    # CENTER TEXT
+    if text_center != "none":
+        image           = image.convert('RGB')
+        draw            = ImageDraw.Draw(image)
+
+        if text_center.find("-") > -1:
+            text_split      = text_center.split("-")
+            text_artist     = text_split[0]
+            text_song       = text_split[1][1:]
+            
+            if text_top != "none":
+                draw.text((0, 15), text_top, font=font_top, fill=(255, 255, 255))
+            
+            draw.text((0, 100), text_artist, font=font_center_top, fill=(255, 255, 255))
+            draw.text((0, 125), text_song, font=font_center_bottom, fill=(255, 255, 255))
+        else:
+            draw.text((0, 100), text_center, font=font_center_top, fill=(255, 255, 255))
+        
+        
+        image   = image.resize((WIDTH, HEIGHT))
+        disp.display(image)
+    else:    
+        image   = image.resize((WIDTH, HEIGHT))
+        disp.display(image)
 
 
-def handle_button(pin):
-	label  = LABELS[BUTTONS.index(pin)]
-    	global MENUPOS, MESSAGE, image
-
-	info        = client.fetch()
-	state       = info['state']
-	eltime      = info['eltime']
-   	vol         = info['volume']
-	artist      = info['artist']
-	title       = info['title']
-	audio       = info['audio_info']
-
-    	if label == "Y":
-		if MENUPOS < 11:
-			MENUPOS = MENUPOS + 1
-	elif label == "B":
-		if MENUPOS > 0:
-			MENUPOS = MENUPOS - 1
-
+def handle_button(pin):   
+    global MENUPOS, MESSAGE, image
+    
+    label  = LABELS[BUTTONS.index(pin)]
+    print(label)
+    
+    if label == "Y":
+        if MENUPOS < 11:
+            MENUPOS = MENUPOS + 1
+    elif label == "B":
+        if MENUPOS > 0:
+            MENUPOS = MENUPOS - 1
+    # MPD Fetch
+    client = MPDConnect()
+    client.connect()
+    
+    # EXTRACT METADATA FROM Python-MPD
+    info        = client.fetch()
+    state       = info['state']
+    eltime      = info['eltime']
+    vol         = info['volume']
+    artist      = info['artist']
+    title       = info['title']
+    audio       = info['audio_info']
+    station     = get_station()
+    
+    client.disconnect()
 
 	#SHOW MENU BASED ON MENUPOS
-	if MENUPOS == 0:
+    if MENUPOS == 0:
 		print("Home")
-		screen_update("home", artist + " - " + title)
+		screen_update("home", title, "none")
 		if label == "X":
 			os.system("mpc play & mpc next")
-			screen_update("home", title)
+			screen_update("home", title, "none")
 		elif label == "A":
 			os.system("mpc update")
-			screen_update("home", "DB Update")
-    	elif MENUPOS == 1:
-		print("Volume: " + str(vol))
-        	screen_update("volume", str(vol))
-            	if label == "X":
-			screen_update("volume", str(vol+5))
-			os.system("mpc volume +5")
-        	elif label == "A":
-			os.system("mpc volume -5")
-            		screen_update("volume", str(vol-5))
+			screen_update("home", "DB Update", "none")
+    
+    elif MENUPOS == 1:
+        print("Volume: " + str(vol))
+        screen_update("volume", str(vol), "none")
+        if label == "X":
+            screen_update("volume", str(vol+5), "none")
+            os.system("mpc volume +5")
+        elif label == "A":
+            os.system("mpc volume -5")
+            screen_update("volume", str(vol-5), "none")
 
-    	elif MENUPOS == 2:
-		print("Playback: Next Prev - " + title)
-        	screen_update("skip", title)
+    
+    elif MENUPOS == 2:
+        print("Playback: Next Prev - " + station + ": " + title)
+        screen_update("skip", title, station)
+        
+        client.connect()
+        if label == "X":
+            screen_update("skip", "Tuning ...", "none")
+            os.system("mpc play & mpc next")
 
-		if label == "X":
-			screen_update("skip", "Tuning ...")
-			os.system("mpc play & mpc next")
-			info	= client.fetch()
-			title	= info['title']
-			screen_update("skip", title)
-        	elif label == "A":
-			screen_update("skip", "Tuning ...")
-			os.system("mpc play & mpc prev")
-			info	= client.fetch()
-			title	= info['title']
-			screen_update("skip", title)
-    	elif MENUPOS == 3:
-		print("Playback: Stop Start - " + title)
-		screen_update("play", state)
-        	if label == "X":
-			os.system("mpc toggle")
-			screen_update("play-paused", eltime)
-        	elif label == "A":
-			os.system("mpc stop")
-			screen_update("play-stopped", state)
-    	elif MENUPOS == 4:
-		print("Sysinfo: Data Temperature")
-        	image = "blank"
-    	elif MENUPOS == 5:
-		print("Power: Reboot Poweroff")
-        	if label == "X":
-			os.system("sudo reboot")
-        	elif label == "A":
-			os.system("sudo poweroff")
+            info	= client.fetch()
+            title	= info['title']
+            station = get_station()
+            screen_update("skip", title, station)
+        elif label == "A":
+            screen_update("skip", "Tuning ...", "none")
+            os.system("mpc play & mpc prev")
+            
+            info	= client.fetch()
+            title	= info['title']
+            station = get_station()
+            screen_update("skip", title, station)
+        client.disconnect()
+    
+    elif MENUPOS == 3:
+        print("Playback: Stop Start - " + title)
+        if state == "play":
+            screen_update("play-playing", "none", "none")
+        elif state == "pause":
+            screen_update("play-paused", "none", "none")
+        elif state == "stop":
+            screen_update("play-stopped", "none", "none")
+        else:
+            screen_update("play", "none", "none")
+        
+        client.connect()
+        if label == "X":
+            os.system("mpc toggle")
+            info        = client.fetch()
+            state       = info['state']
+
+            if state == "pause":
+                screen_update("play-paused", "none", "none")
+            else:
+                screen_update("play-playing", "none", "none")
+        elif label == "A":
+            os.system("mpc stop")
+            info        = client.fetch()
+            state       = info['state']
+            
+            if state == "stop":
+                screen_update("play-stopped", "none", "none")
+        client.disconnect()
+    
+    
+    elif MENUPOS == 4:
+        print("Sysinfo: Data Temperature")
+        image = "blank"
+    
+    
+    elif MENUPOS == 5:
+        print("Power: Reboot Poweroff")
+        if label == "X":
+            os.system("sudo reboot")
+        elif label == "A":
+            os.system("sudo poweroff")
 
 	print(MENUPOS)
 
