@@ -153,12 +153,20 @@ image = image.resize((WIDTH,HEIGHT))
 disp.display(image)
 
 
+def screen_update(file, msg):
+    	font    = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
+    	file    = "/home/pi/git/pirate/themes/streamline/images/" + file + ".png"
+    	image   = Image.open(file)
+	image   = image.convert('RGB')
+    	draw    = ImageDraw.Draw(image)
+    	draw.text((0, 100), msg, font=font, fill=(255, 255, 255))
+
+    	image   = image.resize((WIDTH, HEIGHT))
+	disp.display(image)
 
 
 def handle_button(pin):
 	label  = LABELS[BUTTONS.index(pin)]
-    	font   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
-
     	global MENUPOS, MESSAGE, image
 
 	info        = client.fetch()
@@ -180,58 +188,60 @@ def handle_button(pin):
 	#SHOW MENU BASED ON MENUPOS
 	if MENUPOS == 0:
 		print("Home")
-        	image = Image.open('/home/pi/git/pirate/themes/streamline/images/home.png');
-
+		screen_update("home", artist + " - " + title)
 		if label == "X":
 			os.system("mpc play & mpc next")
+			screen_update("home", title)
 		elif label == "A":
 			os.system("mpc update")
+			screen_update("home", "DB Update")
     	elif MENUPOS == 1:
-		print("Volume: " + str(vol+5))
-        	image = Image.open('/home/pi/git/pirate/themes/streamline/images/volume.png');
-        	if label == "X":
+		print("Volume: " + str(vol))
+        	screen_update("volume", str(vol))
+            	if label == "X":
+			screen_update("volume", str(vol+5))
 			os.system("mpc volume +5")
-                	MESSAGE = str(vol+5)
         	elif label == "A":
 			os.system("mpc volume -5")
-                	MESSAGE = str(vol-5)
+            		screen_update("volume", str(vol-5))
+
     	elif MENUPOS == 2:
-		print("Playback: Next Prev")
-        	image = Image.open('/home/pi/git/pirate/themes/streamline/images/skip.png');
-        	if label == "X":
+		print("Playback: Next Prev - " + title)
+        	screen_update("skip", title)
+
+		if label == "X":
+			screen_update("skip", "Tuning ...")
 			os.system("mpc play & mpc next")
+			info	= client.fetch()
+			title	= info['title']
+			screen_update("skip", title)
         	elif label == "A":
+			screen_update("skip", "Tuning ...")
 			os.system("mpc play & mpc prev")
+			info	= client.fetch()
+			title	= info['title']
+			screen_update("skip", title)
     	elif MENUPOS == 3:
-		print("Playback: Stop Start")
-        	image = Image.open('/home/pi/git/pirate/themes/streamline/images/play.png');
+		print("Playback: Stop Start - " + title)
+		screen_update("play", state)
         	if label == "X":
 			os.system("mpc toggle")
+			screen_update("play-paused", eltime)
         	elif label == "A":
 			os.system("mpc stop")
+			screen_update("play-stopped", state)
     	elif MENUPOS == 4:
 		print("Sysinfo: Data Temperature")
-        	image = Image.open('/home/pi/git/pirate/themes/streamline/images/system.png');
+        	image = "blank"
     	elif MENUPOS == 5:
 		print("Power: Reboot Poweroff")
-        	image = Image.open('/home/pi/git/pirate/themes/streamline/images/power.png');
         	if label == "X":
 			os.system("sudo reboot")
         	elif label == "A":
 			os.system("sudo poweroff")
 
 	print(MENUPOS)
-    
-    
-	# CHANGE SCREEN
-    
-    	image          = image.convert('RGB')
-    	draw           = ImageDraw.Draw(image)
-    	draw.text((0, 100), MESSAGE, font=font, fill=(255, 255, 255))
-    	disp.display(image)
 
-    	image   = image.resize((WIDTH, HEIGHT))
-	disp.display(image)
 
 
 
@@ -239,7 +249,7 @@ def handle_button(pin):
 # We're watching the "FALLING" edge (transition from 3.3V to Ground) and
 # picking a generous bouncetime of 100ms to smooth out button presses.
 for pin in BUTTONS:
-    GPIO.add_event_detect(pin, GPIO.FALLING, handle_button, bouncetime=250)
+    GPIO.add_event_detect(pin, GPIO.FALLING, handle_button, bouncetime=500)
 
 # Finally, since button handlers don't require a "while True" loop,
 # we pause the script to prevent it exiting immediately.
