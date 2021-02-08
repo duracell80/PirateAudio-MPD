@@ -10,7 +10,7 @@ from socket import error as socket_error
 from mpd import MPDClient, MPDError, CommandError, ConnectionError
 
 
-global client
+global client, playlists
 
 # System UTF-8
 reload(sys)
@@ -18,6 +18,7 @@ sys.setdefaultencoding('utf-8')
 
 
 MENUPOS = 0
+LISTPOS = 0
 MESSAGE = ""
 BUTTONS = [5, 6, 16, 20]
 LABELS = ['A', 'B', 'X', 'Y']
@@ -143,7 +144,7 @@ HEIGHT = disp.height
 # Initialize display.
 disp.begin()
 
-
+playlists       = subprocess.check_output("mpc lsplaylists", stderr=subprocess.STDOUT, shell=True).split()
 
 # MPD Fetch
 client = MPDConnect()
@@ -179,7 +180,8 @@ def screen_2(info):
     info['station'] = get_station()
     screen_update("skip", title, info['station']) 
 
-
+def screen_4(info):   
+    screen_update("playlists", "test", "testing")
 
 
 
@@ -252,8 +254,13 @@ def screen_update_home(file, text_center, text_top):
         disp.display(image)
 
 
+
+
+
+
+
 def handle_button(pin):   
-    global MENUPOS, MESSAGE, image, client, label
+    global MENUPOS, LISTPOS, MESSAGE, image, client, label
     
     
 
@@ -290,11 +297,11 @@ def handle_button(pin):
         screen_0(info)
         
         if label == "X":
-            os.system("mpc play & mpc next")
+            os.system("mpc toggle")
             screen_update("home", title, artist)
         elif label == "A":
-            os.system("mpc play & mpc prev")
-            screen_update("home", "DB Update", "none")
+            os.system("mpc stop")
+            screen_update("home", title, artist)
     
     elif MENUPOS == 1:
         screen_1(info)
@@ -325,7 +332,8 @@ def handle_button(pin):
             title	= info['title']
             info['station'] = get_station()
             screen_update("skip", title, info['station'])
-    
+            
+        
     elif MENUPOS == 3:
         print("Playback: Stop Start - " + title)
         if state == "play":
@@ -355,14 +363,31 @@ def handle_button(pin):
             if state == "stop":
                 screen_update("play-stopped", "none", "none")
 
-    
-    
+
     elif MENUPOS == 4:
+        screen_4(info)
+
+        if label == "X":
+            if LISTPOS < 11:
+                LISTPOS = LISTPOS + 1
+            elif LISTPOS == 11:
+                LISTPOS = 0
+        elif label == "A":
+            os.system("mpc stop")
+            os.system("mpc clear")
+            os.system("mpc load " + playlists[LISTPOS])
+            os.system("mpc play")
+
+        print(playlists[LISTPOS])
+        
+        
+    
+    elif MENUPOS == 5:
         print("Sysinfo: Data Temperature")
         image = "blank"
     
     
-    elif MENUPOS == 5:
+    elif MENUPOS == 6:
         print("Power: Reboot Poweroff")
         if label == "X":
             os.system("sudo reboot")
@@ -388,9 +413,10 @@ while True:
     info['station'] = get_station()
     if artist == "Unknown Artist":
         info['artist'] = info['station']
-    if info['station'] == "Unknown Title":
+    if title == "Unknown Title":
         info['artist'] = "Commercial or Break"
         info['station'] = "Commercial or Break"
+        info['title'] = "Commercial or Break"
     
     if MENUPOS == 0:
         # HOME
