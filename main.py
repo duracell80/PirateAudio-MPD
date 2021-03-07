@@ -28,7 +28,7 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setup(BUTTONS, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 #os.system("mpc clear")
-#os.system("mpc load radio_set1")
+#os.system("mpc load radio_set2")
 os.system("mpc repeat on")
 os.system("mpc volume 10")
 os.system("mpc play")
@@ -181,13 +181,15 @@ def get_station(info):
 
 
 def screen_0(info):
-    title = info['title']
-    ctime = strftime("%H:%M:%S", gmtime())
-    if "Announcment" in title:
+    artist  = info['artist']
+    title   = info['title']
+    ctime   = strftime("%H:%M:%S", gmtime())
+    if "Announcement" in title:
         eltime = "            T: " + ctime
     else:
-        eltime = "            E: " + info['eltime']        
-    screen_update_home("home", title, eltime)
+        eltime = "            E: " + info['eltime']
+   
+    screen_update_home("home", artist, eltime)
 
 def screen_1(info):
     vol = info['volume']
@@ -195,9 +197,15 @@ def screen_1(info):
 
 
 def screen_2(info):   
-    title = info['title']
-    info['station'] = get_station(info)
-    screen_update("skip", title, info['station']) 
+    title   = info['title']
+    artist  = info['artist']
+
+    station = get_station(info)
+    if state == "stop":    
+        screen_update("skip", "", "") 
+    else:
+        screen_update("skip", title, station)
+
 
 def screen_4(info):   
     screen_update("playlists", "test", "testing")
@@ -226,8 +234,8 @@ def screen_update(file, text_center, text_top):
             if text_top != "none":
                 draw.text((0, 15), text_top, font=font_top, fill=(255, 255, 255))
             
-            draw.text((0, 100), text_artist, font=font_center_top, fill=(255, 255, 255))
-            draw.text((0, 125), text_song, font=font_center_bottom, fill=(255, 255, 255))
+            draw.text((0, 100), text_song, font=font_center_top, fill=(255, 255, 255))
+            draw.text((0, 125), text_artist, font=font_center_bottom, fill=(255, 255, 255))
         else:            
             draw.text((0, 100), text_center, font=font_center_top, fill=(255, 255, 255))
         
@@ -314,14 +322,14 @@ def handle_button(pin):
 
 	#SHOW MENU BASED ON MENUPOS
     if MENUPOS == 0:
-        screen_0(info)
+        #screen_0(info)
         
         if label == "X":
-            os.system("mpc toggle")
-            screen_update("home", title, artist)
+            os.system("mpc play & mpc next")
+            #screen_update("home", title, artist)
         elif label == "A":
-            os.system("mpc stop")
-            screen_update("home", title, artist)
+            os.system("mpc play & mpc prev")
+            #screen_update("home", title, artist)
     
     elif MENUPOS == 1:
         screen_1(info)
@@ -334,24 +342,24 @@ def handle_button(pin):
         
         
     elif MENUPOS == 2:
-        screen_2(info)
+        #screen_2(info)
         
         if label == "X":
-            screen_update("skip", "Tuning ...", "none")
+            #screen_update("skip", "Tuning ...", "none")
             os.system("mpc play & mpc next")
 
-            info	= client.fetch()
-            title	= info['title']
-            info['station'] = get_station(info)
-            screen_update("skip", title, info['station'])
+            #info	= client.fetch()
+            #title	= info['title']
+            #info['station'] = get_station(info)
+            #screen_update("skip", title, info['station'])
         elif label == "A":
-            screen_update("skip", "Tuning ...", "none")
+            #screen_update("skip", "Tuning ...", "none")
             os.system("mpc play & mpc prev")
             
-            info	= client.fetch()
-            title	= info['title']
-            info['station'] = get_station(info)
-            screen_update("skip", title, info['station'])
+            #info	= client.fetch()
+            #title	= info['title']
+            #info['station'] = get_station(info)
+            #screen_update("skip", title, info['station'])
             
         
     elif MENUPOS == 3:
@@ -426,29 +434,34 @@ for pin in BUTTONS:
 
 
 while True:
+    time.sleep(0.25)    
     info        = client.fetch()
-    eltime      = info['eltime']
     artist      = info['artist']
     title       = info['title']
+    state       = info['state']
+    eltime      = info['eltime']
+    
     info['station'] = get_station(info)
     if artist == "Unknown Artist":
         info['artist'] = info['station']
     if title == "Unknown Title":
-        info['title'] = "Announcment ..."
+        info['title'] = "Announcement ..."
     if artist == "Unknown Artist" and title == "Unknown Title":
         info['title'] = info['station']
 
     if MENUPOS == 0:
         # HOME
+        os.system("clear")        
+        print(artist + " - " + title + " - " + "( "+ eltime +" )")
         screen_0(info)
         
     elif MENUPOS == 2:
         # SKIP
         os.system("clear")        
-        print(artist + " - " + title + " - " + "( " + eltime + " )")
+        print(artist + " - " + title + " - " + "( "+ eltime +" )")
         screen_2(info)
     
-    #time.sleep(0.25)
+    
 
 # Finally, since button handlers don't require a "while True" loop,
 # we pause the script to prevent it exiting immediately.
