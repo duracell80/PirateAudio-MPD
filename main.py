@@ -1,4 +1,4 @@
-import signal, os, re, sys, time, subprocess
+import signal, os, re, sys, time, subprocess, socket
 import RPi.GPIO as GPIO
 import ST7789
 
@@ -8,9 +8,10 @@ from PIL import ImageDraw
 from PIL import ImageFont
 from socket import error as socket_error
 from mpd import MPDClient, MPDError, CommandError, ConnectionError
+from time import gmtime, strftime
 
 
-global client, playlists
+global client, playlists, hostname, hostip
 
 # System UTF-8
 reload(sys)
@@ -32,6 +33,13 @@ os.system("mpc repeat on")
 os.system("mpc volume 10")
 os.system("mpc play")
 
+
+# Update Host Details
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect(("1.1.1.1", 80))
+
+hostname   = socket.gethostname()
+hostip     = s.getsockname()[0]
 
 
 # MPD Client
@@ -73,6 +81,7 @@ class MPDConnect(object):
 
     def fetch(self):
         # MPD current song
+        time.sleep(0.25)
         song_info = self._mpd_client.currentsong()
 
         # Artist Name
@@ -89,8 +98,10 @@ class MPDConnect(object):
         # MPD Status
         song_stats = self._mpd_client.status()
         # State
-        state = song_stats['state']
-
+        if song_stats['state']:
+            state = song_stats['state']
+        else:
+            state = "skipping"
         # Song time
         if 'elapsed' in song_stats:
             elapsed = song_stats['elapsed']
@@ -156,28 +167,36 @@ image = Image.open('/home/pi/git/pirate/themes/streamline/images/home-ico.png');
 image = image.resize((WIDTH,HEIGHT))
 disp.display(image)
 
-def get_station():
+def get_station(info):
     # EXTRACT STATION NAME FROM AMENDED RADIO URL
     # EXAMPLE: http://ice6.somafm.com/lush-128-aac?station_name=SomaFM_Lush
     station_url     = subprocess.check_output("mpc -f %file% current", stderr=subprocess.STDOUT, shell=True)
     info_station    = re.findall(r'\?station_name=(.*)', station_url)
-    info_station_name = info_station[0].replace('_', ' ')
-
+    if len(info_station) > 0:    
+        info_station_name = info_station[0].replace('_', ' ')
+    else:
+        info_station_name = hostip
+ 
     return(info_station_name)
 
 
 def screen_0(info):
     title = info['title']
-    eltime = info['eltime']
-    screen_update_home("home", title, "none")
+    ctime = strftime("%H:%M:%S", gmtime())
+    if "Announcment" in title:
+        eltime = "            T: " + ctime
+    else:
+        eltime = "            E: " + info['eltime']        
+    screen_update_home("home", title, eltime)
 
 def screen_1(info):
     vol = info['volume']
     screen_update("volume", str(vol), "none")
 
+
 def screen_2(info):   
     title = info['title']
-    info['station'] = get_station()
+    info['station'] = get_station(info)
     screen_update("skip", title, info['station']) 
 
 def screen_4(info):   
@@ -209,7 +228,7 @@ def screen_update(file, text_center, text_top):
             
             draw.text((0, 100), text_artist, font=font_center_top, fill=(255, 255, 255))
             draw.text((0, 125), text_song, font=font_center_bottom, fill=(255, 255, 255))
-        else:
+        else:            
             draw.text((0, 100), text_center, font=font_center_top, fill=(255, 255, 255))
         
         
@@ -222,9 +241,9 @@ def screen_update(file, text_center, text_top):
 
 
 def screen_update_home(file, text_center, text_top):
-    font_top             = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 26)
-    font_top_top         = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-    font_top_bottom      = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    font_top             = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
+    font_top_top         = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    font_top_bottom      = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
     file        = "/home/pi/git/pirate/themes/streamline/images/" + file + ".png"
     image       = Image.open(file)
     
@@ -241,9 +260,10 @@ def screen_update_home(file, text_center, text_top):
             if text_top != "none":
                 draw.text((0, 15), text_top, font=font_top, fill=(255, 255, 255))
             
-            draw.text((0, 25), text_artist, font=font_top_top, fill=(255, 255, 255))
-            draw.text((0, 65), text_song, font=font_top_bottom, fill=(255, 255, 255))
+            draw.text((0, 95), text_song, font=font_top_top, fill=(255, 255, 255))
+            draw.text((0, 135), text_artist, font=font_top_bottom, fill=(255, 255, 255))
         else:
+            draw.text((0, 15), text_top, font=font_top, fill=(255, 255, 255))            
             draw.text((0, 105), text_center, font=font_top, fill=(255, 255, 255))
         
         
@@ -282,7 +302,7 @@ def handle_button(pin):
     artist      = info['artist']
     title       = info['title']
     audio       = info['audio_info']
-    info['station'] = get_station()
+    info['station'] = get_station(info)
     
     # ENRICH ARTIST AS STATION IF RADIO
     if artist == "Unknown Artist":
@@ -322,7 +342,7 @@ def handle_button(pin):
 
             info	= client.fetch()
             title	= info['title']
-            info['station'] = get_station()
+            info['station'] = get_station(info)
             screen_update("skip", title, info['station'])
         elif label == "A":
             screen_update("skip", "Tuning ...", "none")
@@ -330,7 +350,7 @@ def handle_button(pin):
             
             info	= client.fetch()
             title	= info['title']
-            info['station'] = get_station()
+            info['station'] = get_station(info)
             screen_update("skip", title, info['station'])
             
         
@@ -410,24 +430,25 @@ while True:
     eltime      = info['eltime']
     artist      = info['artist']
     title       = info['title']
-    info['station'] = get_station()
+    info['station'] = get_station(info)
     if artist == "Unknown Artist":
         info['artist'] = info['station']
     if title == "Unknown Title":
-        info['artist'] = "Commercial or Break"
-        info['station'] = "Commercial or Break"
-        info['title'] = "Commercial or Break"
-    
+        info['title'] = "Announcment ..."
+    if artist == "Unknown Artist" and title == "Unknown Title":
+        info['title'] = info['station']
+
     if MENUPOS == 0:
         # HOME
         screen_0(info)
         
     elif MENUPOS == 2:
         # SKIP
+        os.system("clear")        
         print(artist + " - " + title + " - " + "( " + eltime + " )")
         screen_2(info)
     
-    time.sleep(5)
+    #time.sleep(0.25)
 
 # Finally, since button handlers don't require a "while True" loop,
 # we pause the script to prevent it exiting immediately.
