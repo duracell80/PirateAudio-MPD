@@ -210,7 +210,8 @@ def screen_2(info):
 def screen_4(info):   
     screen_update("playlists", "test", "testing")
 
-
+def screen_5(info):   
+    screen_update("power", "none", "none")
 
 
 
@@ -218,7 +219,7 @@ def screen_update(file, text_center, text_top):
     font_top                = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
     font_center_top         = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
     font_center_bottom      = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
-    file        = "/home/pi/git/pirate/themes/streamline/images/" + file + ".png"
+    file        = "/home/pi/git/PirateAudio-MPD/themes/streamline/images/" + file + ".png"
     image       = Image.open(file)
     
     # CENTER TEXT
@@ -408,19 +409,21 @@ def handle_button(pin):
 
         print(playlists[LISTPOS])
         
-        
-    
     elif MENUPOS == 5:
+        print("Power: Reboot Poweroff")
+        screen_5(info)
+        
+        if label == "X":
+            os.system("sudo reboot")
+        elif label == "A":
+            os.system("sudo poweroff")    
+    
+    elif MENUPOS == 6:
         print("Sysinfo: Data Temperature")
         image = "blank"
     
     
-    elif MENUPOS == 6:
-        print("Power: Reboot Poweroff")
-        if label == "X":
-            os.system("sudo reboot")
-        elif label == "A":
-            os.system("sudo poweroff")
+    
 
 	print(MENUPOS)
 
@@ -467,3 +470,4 @@ while True:
 # we pause the script to prevent it exiting immediately.
 client.disconnect()
 signal.pause()
+
