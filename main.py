@@ -19,7 +19,7 @@ sys.setdefaultencoding('utf-8')
 
 
 MENUPOS = 0
-LISTPOS = 0
+LISTPOS = 1
 MESSAGE = ""
 BUTTONS = [5, 6, 16, 20]
 LABELS = ['A', 'B', 'X', 'Y']
@@ -155,7 +155,8 @@ HEIGHT = disp.height
 # Initialize display.
 disp.begin()
 
-playlists       = subprocess.check_output("mpc lsplaylists", stderr=subprocess.STDOUT, shell=True).split()
+playlists   = subprocess.check_output("mpc lsplaylists", stderr=subprocess.STDOUT, shell=True).split()
+playsize    = len(playlists)
 
 # MPD Fetch
 client = MPDConnect()
@@ -207,8 +208,8 @@ def screen_2(info):
         screen_update("skip", title, station)
 
 
-def screen_4(info):   
-    screen_update("playlists", "test", "testing")
+def screen_4(playshow, playidx):   
+    screen_update_play("playlists", playshow, playidx)
 
 def screen_5(info):   
     screen_update("power", "none", "none")
@@ -283,7 +284,26 @@ def screen_update_home(file, text_center, text_top):
         disp.display(image)
 
 
+def screen_update_play(file, text_name, text_index):
+    font_top                = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    font_center_top         = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+    font_center_bottom      = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
+    file        = "/home/pi/git/PirateAudio-MPD/themes/streamline/images/" + file + ".png"
+    image       = Image.open(file)
+    
+    text_index = "Playlist " + str(text_index) + " of " + str(playsize)
+    
+    # PLAYLIST TEXT
+    image           = image.convert('RGB')
+    draw            = ImageDraw.Draw(image)
 
+    draw.text((0, 100), text_name, font=font_center_top, fill=(255, 255, 255))
+    draw.text((0, 125), text_index, font=font_center_bottom, fill=(255, 255, 255))
+    
+    
+    image   = image.resize((WIDTH, HEIGHT))
+    disp.display(image)
+    
 
 
 
@@ -392,22 +412,22 @@ def handle_button(pin):
             if state == "stop":
                 screen_update("play-stopped", "none", "none")
 
-
+    # PLAYLISTS
     elif MENUPOS == 4:
-        screen_4(info)
-
-        if label == "X":
-            if LISTPOS < 11:
+        
+        if label == "A":
+            if LISTPOS < playsize:
                 LISTPOS = LISTPOS + 1
-            elif LISTPOS == 11:
-                LISTPOS = 0
-        elif label == "A":
+            elif LISTPOS == playsize:
+                LISTPOS = 1
+        elif label == "X":
             os.system("mpc stop")
             os.system("mpc clear")
-            os.system("mpc load " + playlists[LISTPOS])
+            os.system("mpc load " + playlists[LISTPOS-1])
             os.system("mpc play")
-
-        print(playlists[LISTPOS])
+        screen_4(playlists[LISTPOS-1], str(LISTPOS))
+        
+        print("Playlist (" + str(LISTPOS) + " of " + str(playsize) + "): " + playlists[LISTPOS-1])
         
     elif MENUPOS == 5:
         print("Power: Reboot Poweroff")
@@ -433,7 +453,7 @@ def handle_button(pin):
 # We're watching the "FALLING" edge (transition from 3.3V to Ground) and
 # picking a generous bouncetime of 100ms to smooth out button presses.
 for pin in BUTTONS:
-    GPIO.add_event_detect(pin, GPIO.FALLING, handle_button, bouncetime=50)
+    GPIO.add_event_detect(pin, GPIO.FALLING, handle_button, bouncetime=100)
 
 
 while True:
